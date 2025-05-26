@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   output: 'export',
-  basePath: process.env.NODE_ENV === 'production' ? '/kite-aggregator' : '',
+  basePath: process.env.NODE_ENV === 'production' ? '/KITE-Aggregator' : '',
 };
 
 export default nextConfig;
