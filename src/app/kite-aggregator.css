@@ -1,0 +1,280 @@
+/* KITE Aggregator Custom Styles */
+
+/* Main Layout */
+.kite-main-container {
+  min-h: 100vh;
+  background: linear-gradient(135deg, hsl(var(--background)) 0%, hsl(var(--background)) 50%, hsl(var(--muted) / 0.2) 100%);
+  padding: 1rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.kite-main-card {
+  width: 100%;
+  max-width: 112rem; /* 7xl */
+  margin: 0 auto;
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  border: none;
+  background: hsl(var(--card) / 0.95);
+  backdrop-filter: blur(4px);
+}
+
+/* OPTION 1: Minimalist Line Art (Current) */
+.kite-main-headline-option1 {
+  text-align: center;
+  padding: 3rem 0;
+  border-bottom: 1px solid hsl(var(--border));
+  background: #000000;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 120'%3E%3Cg transform='translate(50,60)'%3E%3Crect x='18' y='25' width='14' height='35' fill='%23ffffff' rx='2'/%3E%3Ccircle cx='25' cy='15' r='8' fill='%23ffffff'/%3E%3Crect x='10' y='30' width='12' height='4' fill='%23ffffff' rx='2'/%3E%3Crect x='28' y='28' width='12' height='4' fill='%23ffffff' rx='2'/%3E%3Crect x='20' y='60' width='4' height='20' fill='%23ffffff'/%3E%3Crect x='26' y='60' width='4' height='20' fill='%23ffffff'/%3E%3Cline x1='40' y1='30' x2='150' y2='15' stroke='%23ffffff' stroke-width='1'/%3E%3C/g%3E%3Cg transform='translate(200,15)'%3E%3Cpolygon points='0,0 10,8 0,16 -10,8' fill='%23ffffff'/%3E%3Cline x1='0' y1='0' x2='0' y2='16' stroke='%23000000' stroke-width='1'/%3E%3Cline x1='-10' y1='8' x2='10' y2='8' stroke='%23000000' stroke-width='1'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  overflow: hidden;
+}
+
+/* OPTION 2: Colorful Flat Design */
+.kite-main-headline-option2 {
+  text-align: center;
+  padding: 3rem 0;
+  border-bottom: 1px solid hsl(var(--border));
+  background: linear-gradient(135deg, #1e40af 0%, #3730a3 100%);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 120'%3E%3Cg transform='translate(60,70)'%3E%3Crect x='15' y='20' width='20' height='40' fill='%23fbbf24' rx='10'/%3E%3Ccircle cx='25' cy='12' r='10' fill='%23f59e0b'/%3E%3Crect x='8' y='25' width='15' height='6' fill='%23f59e0b' rx='3'/%3E%3Crect x='27' y='23' width='15' height='6' fill='%23f59e0b' rx='3'/%3E%3Crect x='18' y='60' width='6' height='25' fill='%23374151'/%3E%3Crect x='26' y='60' width='6' height='25' fill='%23374151'/%3E%3Cline x1='42' y1='25' x2='140' y2='10' stroke='%23374151' stroke-width='2'/%3E%3C/g%3E%3Cg transform='translate(200,10)'%3E%3Cpolygon points='0,0 15,12 0,24 -15,12' fill='%23ef4444'/%3E%3Cpolygon points='0,0 15,12 0,24 -15,12' fill='%23dc2626' opacity='0.7'/%3E%3Cline x1='0' y1='0' x2='0' y2='24' stroke='%23374151' stroke-width='2'/%3E%3Cline x1='-15' y1='12' x2='15' y2='12' stroke='%23374151' stroke-width='2'/%3E%3Cg transform='translate(0,24)'%3E%3Crect x='-2' y='0' width='4' height='8' fill='%23fbbf24'/%3E%3Crect x='-2' y='10' width='4' height='8' fill='%23ef4444'/%3E%3Crect x='-2' y='20' width='4' height='8' fill='%2310b981'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  overflow: hidden;
+}
+
+/* OPTION 3: Geometric Abstract */
+.kite-main-headline-option3 {
+  text-align: center;
+  padding: 3rem 0;
+  border-bottom: 1px solid hsl(var(--border));
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 120'%3E%3Cdefs%3E%3ClinearGradient id='grad1' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%2306b6d4;stop-opacity:1'/%3E%3Cstop offset='100%25' style='stop-color:%233b82f6;stop-opacity:1'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='80' cy='60' r='25' fill='url(%23grad1)' opacity='0.8'/%3E%3Cpolygon points='200,20 220,40 200,60 180,40' fill='%23f59e0b' opacity='0.9'/%3E%3Cpolygon points='320,30 340,50 320,70 300,50' fill='%23ef4444' opacity='0.7'/%3E%3Cline x1='105' y1='60' x2='180' y2='40' stroke='%2306b6d4' stroke-width='2' opacity='0.8'/%3E%3Cline x1='220' y1='40' x2='300' y2='50' stroke='%23f59e0b' stroke-width='2' opacity='0.8'/%3E%3Ccircle cx='80' cy='60' r='3' fill='%23ffffff'/%3E%3Ccircle cx='200' cy='40' r='3' fill='%23ffffff'/%3E%3Ccircle cx='320' cy='50' r='3' fill='%23ffffff'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  overflow: hidden;
+}
+
+/* OPTION 4: Scientific Blueprint Style */
+.kite-main-headline-option4 {
+  text-align: center;
+  padding: 3rem 0;
+  border-bottom: 1px solid hsl(var(--border));
+  background: #0c1821;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 120'%3E%3Cdefs%3E%3Cpattern id='grid' width='20' height='20' patternUnits='userSpaceOnUse'%3E%3Cpath d='M 20 0 L 0 0 0 20' fill='none' stroke='%2300d4ff' stroke-width='0.5' opacity='0.3'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='400' height='120' fill='url(%23grid)'/%3E%3Cg transform='translate(70,70)'%3E%3Crect x='15' y='20' width='20' height='40' fill='none' stroke='%2300d4ff' stroke-width='1.5' rx='2'/%3E%3Ccircle cx='25' cy='12' r='8' fill='none' stroke='%2300d4ff' stroke-width='1.5'/%3E%3Cline x1='7' y1='25' x2='22' y2='25' stroke='%2300d4ff' stroke-width='1.5'/%3E%3Cline x1='28' y1='23' x2='43' y2='23' stroke='%2300d4ff' stroke-width='1.5'/%3E%3Cline x1='20' y1='60' x2='20' y2='85' stroke='%2300d4ff' stroke-width='1.5'/%3E%3Cline x1='30' y1='60' x2='30' y2='85' stroke='%2300d4ff' stroke-width='1.5'/%3E%3Cline x1='43' y1='23' x2='130' y2='8' stroke='%2300d4ff' stroke-width='1' stroke-dasharray='2,2'/%3E%3C/g%3E%3Cg transform='translate(200,8)'%3E%3Cpolygon points='0,0 15,12 0,24 -15,12' fill='none' stroke='%2300d4ff' stroke-width='1.5'/%3E%3Cline x1='0' y1='0' x2='0' y2='24' stroke='%2300d4ff' stroke-width='1'/%3E%3Cline x1='-15' y1='12' x2='15' y2='12' stroke='%2300d4ff' stroke-width='1'/%3E%3Ctext x='20' y='15' fill='%2300d4ff' font-size='8' font-family='monospace'%3EKITE%3C/text%3E%3C/g%3E%3C/svg%3E");
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Default header class - clean without background image */
+.kite-main-headline {
+  text-align: center;
+  padding: 3rem 0;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  position: relative;
+  overflow: hidden;
+}
+
+.kite-headline-text {
+  font-size: 3rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  background: linear-gradient(135deg, #ffffff, #f1f5f9, #e2e8f0);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  position: relative;
+  z-index: 2;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Content Cards */
+.kite-content-card {
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+  border: none;
+  background: hsl(var(--card) / 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.kite-section-title {
+  font-size: 1.875rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.kite-section-description {
+  font-size: 1.125rem;
+  margin-top: 0.5rem;
+}
+
+/* Article Cards */
+.kite-article-card {
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  padding: 1rem;
+}
+
+.kite-article-card:hover {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+  transform: translateY(-1px);
+}
+
+.kite-article-title {
+  font-weight: 600;
+  line-height: 1.25;
+  margin-bottom: 0.5rem;
+}
+
+.kite-article-content {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin-bottom: 0.75rem;
+}
+
+.kite-article-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Feed Source Cards */
+.kite-feed-card {
+  padding: 1rem;
+  transition: all 0.2s ease-in-out;
+}
+
+.kite-feed-card:hover {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+}
+
+.kite-feed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.kite-feed-info {
+  flex: 1;
+  margin-right: 1rem;
+}
+
+.kite-feed-title {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.kite-feed-url {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  word-break: break-all;
+  margin-bottom: 0.25rem;
+}
+
+.kite-feed-meta {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Folder Cards */
+.kite-folder-card {
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.kite-folder-card:hover {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+}
+
+/* Empty States */
+.kite-empty-state {
+  border: 2px dashed hsl(var(--border));
+  background: transparent;
+}
+
+.kite-empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 0;
+  text-align: center;
+}
+
+.kite-empty-icon {
+  width: 3rem;
+  height: 3rem;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 1rem;
+}
+
+.kite-empty-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.kite-empty-description {
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 1rem;
+}
+
+/* Animations */
+@keyframes kite-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.kite-animate-in {
+  animation: kite-fade-in 0.5s ease-out;
+}
+
+.kite-animate-in-delayed {
+  animation: kite-fade-in 0.3s ease-out;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .kite-headline-text {
+    font-size: 2.25rem;
+  }
+  
+  .kite-section-title {
+    font-size: 1.5rem;
+  }
+  
+  .kite-section-description {
+    font-size: 1rem;
+  }
+}
+
+/* Dark Mode Adjustments */
+.dark .kite-main-container {
+  background: linear-gradient(135deg, hsl(var(--background)) 0%, hsl(var(--background)) 50%, hsl(var(--muted) / 0.1) 100%);
+}
+
+.dark .kite-headline-text {
+  background: linear-gradient(135deg, #ffffff, #f8fafc, #e2e8f0);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
