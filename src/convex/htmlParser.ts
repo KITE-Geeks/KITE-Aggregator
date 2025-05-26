@@ -70,10 +70,97 @@ export const parseHtmlPage = internalAction({
       const $ = cheerio.load(html);
       const articles: any[] = [];
       
-      // Try multiple selectors to find articles
+      // Special case for Last Week in AI
+      if (args.url.includes('lastweekin.ai')) {
+        console.log('Detected Last Week in AI website, using specialized parsing');
+        
+        // Find all article links
+        const articleLinks = $('a[href*="/p/"]').filter(function(this: any) {
+          // Filter to only get the main article links (not share links)
+          const href = $(this).attr('href');
+          return href !== undefined && 
+                 href.includes('/p/') && 
+                 !$(this).parent().text().includes('Share') &&
+                 $(this).text().trim().length > 10;
+        });
+        
+        console.log(`Found ${articleLinks.length} article links on Last Week in AI`);
+        
+        // Process each article link
+        articleLinks.each((index, element) => {
+          try {
+            const $link = $(element);
+            const href = $link.attr('href') || '';
+            
+            // Skip if no valid href
+            if (!href || !href.includes('/p/')) return;
+            
+            // Extract title from the link text
+            const title = $link.text().trim();
+            if (!title || title.length < 10) return;
+            
+            // Find the description/content (usually the next sibling link)
+            let content = '';
+            const $nextLink = $link.parent().next().find('a');
+            if ($nextLink.length > 0) {
+              content = $nextLink.text().trim();
+            }
+            
+            // If no content found, try to find it in other ways
+            if (!content) {
+              // Look for nearby paragraphs
+              const $nearbyP = $link.parent().parent().find('p');
+              if ($nearbyP.length > 0) {
+                $nearbyP.each((i, el) => {
+                  const text = $(el).text().trim();
+                  if (text && text.length > 10 && text !== title) {
+                    content += text + ' ';
+                  }
+                });
+              }
+            }
+            
+            // If still no content, use the title as content
+            if (!content.trim()) {
+              content = title;
+            }
+            
+            // Make the link absolute if it's relative
+            let fullUrl = href;
+            if (!href.startsWith('http')) {
+              fullUrl = new URL(href, args.url).toString();
+            }
+            
+            // Use current date as we don't have reliable date info
+            const publicationDate = Date.now();
+            
+            articles.push({
+              title: title,
+              content: content.trim() || title,
+              originalAddress: fullUrl,
+              publicationDate: publicationDate,
+            });
+            
+          } catch (error) {
+            console.error('Error parsing Last Week in AI article:', error);
+          }
+        });
+        
+        console.log(`Successfully parsed ${articles.length} articles from Last Week in AI`);
+        
+        // Return articles if we found any
+        if (articles.length > 0) {
+          return articles;
+        }
+      }
+      
+      // Try multiple selectors to find articles for other sites
       const selectors = [
         '.cursor-pointer', // Simple class that should match
         'div[class*="cursor-pointer"]', // Any div with cursor-pointer in class
+        '.post-preview', // Substack post preview
+        '.post', // Generic post class
+        'article', // Generic article element
         'h2', // Just find all h2 elements (titles)
       ];
       
@@ -82,7 +169,86 @@ export const parseHtmlPage = internalAction({
         const elements = $(selector);
         console.log(`Found ${elements.length} elements with selector: ${selector}`);
         
-        if (selector === 'h2') {
+        if (selector === '.post-preview' || selector === '.post' || selector === 'article') {
+          // Special handling for Substack post previews
+          elements.each((index, element) => {
+            try {
+              const $article = $(element);
+              
+              // Extract title
+              let title = '';
+              const $title = $article.find('.post-title, h3, .title, h2');
+              if ($title.length > 0) {
+                title = $title.first().text().trim();
+              }
+              
+              if (!title || title.length < 5) return;
+              
+              // Extract content
+              let content = '';
+              const $content = $article.find('.post-subtitle, p, .summary, .excerpt');
+              if ($content.length > 0) {
+                $content.each((i, el) => {
+                  const text = $(el).text().trim();
+                  if (text && text.length > 10) {
+                    content += text + ' ';
+                  }
+                });
+              }
+              
+              if (!content.trim()) {
+                content = title;
+              }
+              
+              // Extract link
+              let link = '';
+              const $link = $article.find('a[href*="/p/"]');
+              if ($link.length > 0) {
+                link = $link.attr('href') || '';
+                // Make sure the link is absolute
+                if (link && !link.startsWith('http')) {
+                  link = new URL(link, args.url).toString();
+                }
+              }
+              
+              if (!link) {
+                // Generate a link based on the title as fallback
+                const slug = title.toLowerCase()
+                  .replace(/[^a-z0-9\s-]/g, '')
+                  .replace(/\s+/g, '-')
+                  .replace(/-+/g, '-')
+                  .replace(/^-|-$/g, '');
+                link = `${args.url.split('?')[0]}/${slug}`;
+              }
+              
+              // Extract date
+              let publicationDate = Date.now();
+              const $date = $article.find('.post-meta, time, .date');
+              if ($date.length > 0) {
+                const dateText = $date.first().text().trim();
+                const parsedDate = parseDate(dateText);
+                if (parsedDate) {
+                  publicationDate = parsedDate;
+                }
+              }
+              
+              articles.push({
+                title: title,
+                content: content.trim() || title,
+                originalAddress: link,
+                publicationDate: publicationDate,
+              });
+              
+            } catch (error) {
+              console.error('Error parsing Substack article element:', error);
+            }
+          });
+          
+          if (articles.length > 0) {
+            console.log(`Successfully found ${articles.length} articles using selector: ${selector}`);
+            break; // Stop trying other selectors if we found articles
+          }
+        } else if (selector === 'h2') {
           // Special handling for h2 elements - find their parent containers
           elements.each((index, element) => {
             try {
