@@ -74,69 +74,81 @@ export const parseHtmlPage = internalAction({
       if (args.url.includes('lastweekin.ai')) {
         console.log('Detected Last Week in AI website, using specialized parsing');
         
-        // Find all article links
-        const articleLinks = $('a[href*="/p/"]').filter(function(this: any) {
-          // Filter to only get the main article links (not share links)
-          const href = $(this).attr('href');
-          return href !== undefined && 
-                 href.includes('/p/') && 
-                 !$(this).parent().text().includes('Share') &&
-                 $(this).text().trim().length > 10;
-        });
+        // Try multiple selectors to find article containers
+        const articleContainers = $('div.cursor-pointer, .post-preview, article, [class*="post-"]');
+        console.log(`Found ${articleContainers.length} potential article containers`);
         
-        console.log(`Found ${articleLinks.length} article links on Last Week in AI`);
+        // Track processed URLs to avoid duplicates
+        const processedUrls = new Set<string>();
         
-        // Process each article link
-        articleLinks.each((index, element) => {
+        articleContainers.each((index, container) => {
           try {
-            const $link = $(element);
+            const $container = $(container);
+            
+            // Find the main article link
+            const $link = $container.find('a[href*="/p/"]').first();
+            
+            // Skip if no valid link found
+            if ($link.length === 0) return;
+            
             const href = $link.attr('href') || '';
-            
-            // Skip if no valid href
-            if (!href || !href.includes('/p/')) return;
-            
-            // Extract title from the link text
             const title = $link.text().trim();
-            if (!title || title.length < 10) return;
             
-            // Find the description/content (usually the next sibling link)
+            // Skip if no valid title
+            if (!title || title.length < 5) return;
+            
+            // Skip if we've already processed this URL
+            const fullUrl = href.startsWith('http') ? href : new URL(href, args.url).toString();
+            if (processedUrls.has(fullUrl)) return;
+            processedUrls.add(fullUrl);
+            
+            // Find content - try multiple approaches
             let content = '';
-            const $nextLink = $link.parent().next().find('a');
-            if ($nextLink.length > 0) {
-              content = $nextLink.text().trim();
-            }
             
-            // If no content found, try to find it in other ways
-            if (!content) {
-              // Look for nearby paragraphs
-              const $nearbyP = $link.parent().parent().find('p');
-              if ($nearbyP.length > 0) {
-                $nearbyP.each((i, el) => {
-                  const text = $(el).text().trim();
-                  if (text && text.length > 10 && text !== title) {
-                    content += text + ' ';
-                  }
-                });
+            // 1. Look for direct text nodes in container
+            $container.contents().each((i, el) => {
+              if (el.nodeType === 3) { // Text node
+                const text = $(el).text().trim();
+                if (text && text.length > 10 && text !== title) {
+                  content += text + ' ';
+                }
               }
+            });
+            
+            // 2. Look for paragraphs or divs with content
+            if (!content.trim()) {
+              $container.find('p, div').each((i, el) => {
+                const text = $(el).text().trim();
+                if (text && text.length > 10 && text !== title) {
+                  content += text + ' ';
+                }
+              });
             }
             
-            // If still no content, use the title as content
+            // 3. If still no content, use title
             if (!content.trim()) {
               content = title;
             }
             
-            // Make the link absolute if it's relative
-            let fullUrl = href;
-            if (!href.startsWith('http')) {
-              fullUrl = new URL(href, args.url).toString();
+            // Try to extract date if available
+            let publicationDate = Date.now();
+            const dateText = $container.find('time, [datetime], .date, .post-date').first().text().trim();
+            if (dateText) {
+              const parsedDate = parseDate(dateText);
+              if (parsedDate) {
+                publicationDate = parsedDate;
+              }
             }
             
-            // Use current date as we don't have reliable date info
-            const publicationDate = Date.now();
+            // Clean up content
+            content = content
+              .replace(/\s+/g, ' ') // Normalize whitespace
+              .replace(/\s*[\r\n]+\s*/g, '\n') // Normalize newlines
+              .trim();
             
             articles.push({
               title: title,
-              content: content.trim() || title,
+              content: content,
               originalAddress: fullUrl,
               publicationDate: publicationDate,
             });
