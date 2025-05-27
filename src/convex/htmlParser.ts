@@ -74,19 +74,19 @@ export const parseHtmlPage = internalAction({
       if (args.url.includes('lastweekin.ai')) {
         console.log('Detected Last Week in AI website, using specialized parsing');
         
-        // Find all article sections - each article is in a section with data-testid="post-list"
-        const articleSections = $('section[data-testid="post-list"] > div > div');
-        console.log(`Found ${articleSections.length} article sections`);
+        // Find all article containers - each article is in a div with role="article"
+        const articleContainers = $('div[role="article"]');
+        console.log(`Found ${articleContainers.length} article containers`);
         
         // Track processed URLs to avoid duplicates
         const processedUrls = new Set<string>();
         
-        articleSections.each((index, section) => {
+        articleContainers.each((index, container) => {
           try {
-            const $section = $(section);
+            const $container = $(container);
             
             // Find the main article link (should be the first link with /p/ in URL)
-            const $mainLink = $section.find('a[href*="/p/"]').first();
+            const $mainLink = $container.find('a[href*="/p/"]').first();
             const href = $mainLink.attr('href') || '';
             let title = $mainLink.text().trim();
             
@@ -100,9 +100,9 @@ export const parseHtmlPage = internalAction({
             if (processedUrls.has(fullUrl)) return;
             processedUrls.add(fullUrl);
             
-            // Find the subtitle (usually in a div after the title link)
+            // Find the subtitle (in the next div after the title link's parent)
             let subtitle = '';
-            const $subtitle = $mainLink.parent().next('div');
+            const $subtitle = $mainLink.closest('div').next('div').find('a').first();
             if ($subtitle.length > 0) {
               subtitle = $subtitle.text().trim();
             }
@@ -113,33 +113,55 @@ export const parseHtmlPage = internalAction({
               content = `${title}\n\n${subtitle}`;
             }
             
-            // Try to find the publication date
-            // It's usually in a div with class containing 'meta' or 'date' and has text like 'X hours ago' or 'X days ago'
+            // Find the publication date in the time element
             let publicationDate: number | null = null;
-            const $dateElement = $section.find('div:contains("ago")').first();
+            const $dateElement = $container.find('time[datetime]');
+            
             if ($dateElement.length > 0) {
-              const dateText = $dateElement.text().trim();
-              if (dateText) {
-                const parsedDate = parseDate(dateText);
-                if (parsedDate) {
+              const dateString = $dateElement.attr('datetime');
+              if (dateString) {
+                const parsedDate = new Date(dateString).getTime();
+                if (!isNaN(parsedDate)) {
                   publicationDate = parsedDate;
                 }
               }
             }
             
-            // If no valid date found, try to find a timestamp in the URL
+            // If no valid date found, look for date text
+            if (!publicationDate) {
+              const $dateTextElement = $container.find('div:contains("Last Week in AI #")').first();
+              if ($dateTextElement.length > 0) {
+                let dateText = $dateTextElement.text().trim();
+                // Extract date in format 'Month Day' (e.g., 'May 18')
+                const dateMatch = dateText.match(/([A-Za-z]+ \d{1,2})/);
+                if (dateMatch) {
+                  const dateString = `${dateMatch[0]}, ${new Date().getFullYear()} 12:00:00 UTC`;
+                  const parsedDate = new Date(dateString).getTime();
+                  if (!isNaN(parsedDate)) {
+                    publicationDate = parsedDate;
+                  }
+                }
+              }
+            }
+            
+            // If still no date, try to find a timestamp in the URL
             if (!publicationDate && href) {
               const dateMatch = href.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
               if (dateMatch) {
                 const [_, year, month, day] = dateMatch;
-                const dateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`;
-                publicationDate = new Date(dateString).getTime();
+                const dateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00Z`;
+                const parsedDate = new Date(dateString).getTime();
+                if (!isNaN(parsedDate)) {
+                  publicationDate = parsedDate;
+                }
               }
             }
             
-            // If still no date, use current time (as a last resort)
+            // If still no date, use the current date at noon UTC (as a last resort)
             if (!publicationDate) {
-              publicationDate = new Date().getTime();
+              const today = new Date();
+              today.setUTCHours(12, 0, 0, 0);
+              publicationDate = today.getTime();
             }
             
             // Add the article
