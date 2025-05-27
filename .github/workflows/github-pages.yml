@@ -47,14 +47,22 @@ jobs:
             ${{ runner.os }}-pnpm-store-
           
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install
+          fi
         
       - name: Build with Next.js
         run: |
           echo "NEXT_PUBLIC_BASE_PATH=/KITE-Aggregator" >> .env
+          echo "NEXT_PUBLIC_CONVEX_URL=${{ secrets.NEXT_PUBLIC_CONVEX_URL }}" >> .env
+          echo "ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}" >> .env
           pnpm build
         env:
           GITHUB_ACTIONS: 'true'
+          NODE_ENV: 'production'
           
       - name: Export static site
         run: pnpm export
