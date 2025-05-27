@@ -70,338 +70,55 @@ export const parseHtmlPage = internalAction({
       const $ = cheerio.load(html);
       const articles: any[] = [];
       
-      // Track all processed articles using URL as the primary key
-      const processedArticleUrls = new Set<string>();
-      
-      // Track the original domain of the feed
-      let feedDomain: string | null = null;
-      try {
-        feedDomain = new URL(args.url).hostname;
-        console.log(`Feed domain set to: ${feedDomain}`);
-      } catch (e) {
-        console.warn(`Could not parse feed domain from URL: ${args.url}`);
-      }
-
-      // Function to validate and normalize URL
-      const normalizeUrl = (url: string, baseUrl: string): string | null => {
+      // Function to ensure URLs are properly resolved against the base URL
+      const resolveUrl = (url: string, baseUrl: string): string => {
         try {
-          // Skip empty or invalid URLs
-          if (!url || url.trim() === '' || url.trim() === '#') {
-            console.log(`Skipping empty or invalid URL: "${url}"`);
-            return null;
+          if (!url) return '';
+          
+          // If it's already an absolute URL, return it as is
+          if (url.startsWith('http')) {
+            return url;
           }
           
-          // Clean up the URL
-          let cleanUrl = url.trim();
-          
-          // Handle mailto: and other non-http protocols
-          if (cleanUrl.startsWith('mailto:') || cleanUrl.startsWith('tel:') || 
-              cleanUrl.startsWith('javascript:') || cleanUrl.startsWith('#')) {
-            console.log(`Skipping non-http URL: "${cleanUrl}"`);
-            return null;
-          }
-          
-          // Handle protocol-relative URLs (starting with //)
-          if (cleanUrl.startsWith('//')) {
-            cleanUrl = 'https:' + cleanUrl;
-          }
-          // Handle root-relative URLs
-          else if (cleanUrl.startsWith('/')) {
+          // Handle protocol-relative URLs
+          if (url.startsWith('//')) {
             const base = new URL(baseUrl);
-            cleanUrl = `${base.protocol}//${base.host}${cleanUrl}`;
-          }
-          // Handle relative URLs (without protocol)
-          else if (!cleanUrl.startsWith('http')) {
-            // Ensure baseUrl ends with a slash for proper relative URL resolution
-            const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-            cleanUrl = new URL(cleanUrl, normalizedBase).toString();
+            return `${base.protocol}${url}`;
           }
           
-          // Create URL object for further processing
-          const urlObj = new URL(cleanUrl);
-          
-          // Check if this URL points to a different domain than our feed
-          if (feedDomain && urlObj.hostname !== feedDomain) {
-            console.log(`External URL detected (${urlObj.hostname} vs ${feedDomain}): "${cleanUrl}"`);
-            
-            // If this is a cross-feed link, we might want to treat it differently
-            // For now, we'll keep it but log it
-            console.log(`Cross-feed link detected: ${cleanUrl}`);
+          // Handle root-relative URLs
+          if (url.startsWith('/')) {
+            const base = new URL(baseUrl);
+            return `${base.origin}${url}`;
           }
           
-          // Normalize the URL
-          let normalizedUrl = `${urlObj.protocol}//${urlObj.host}${urlObj.pathname}`;
-          
-          // Remove common tracking parameters
-          const trackingParams = ['utm_', 'ref_', 'source', 'cmp', 'campaign', 'fbclid', 'gclid', 'msclkid'];
-          const searchParams = new URLSearchParams(urlObj.search);
-          
-          // Remove tracking parameters
-          for (const param of searchParams.keys()) {
-            if (trackingParams.some(tp => param.startsWith(tp))) {
-              searchParams.delete(param);
-            }
-          }
-          
-          // Rebuild the search string if we have remaining parameters
-          const searchString = searchParams.toString();
-          
-          // Remove trailing slash for consistency
-          normalizedUrl = normalizedUrl.replace(/\/$/, '');
-          
-          // Skip if URL is just the base URL
-          const baseUrlObj = new URL(baseUrl);
-          const baseNormalized = `${baseUrlObj.protocol}//${baseUrlObj.host}${baseUrlObj.pathname}`.replace(/\/$/, '');
-          
-          if (normalizedUrl === baseNormalized) {
-            console.log(`Skipping URL as it matches base URL: ${normalizedUrl}`);
-            return null;
-          }
-          
-          // Rebuild URL with cleaned up components
-          const result = new URL(normalizedUrl);
-          
-          // Add back non-tracking query parameters
-          if (searchString) {
-            result.search = searchString;
-          }
-          
-          // Ensure we're using HTTPS for security
-          if (result.protocol === 'http:') {
-            result.protocol = 'https:';
-            console.log(`Upgraded to HTTPS: ${result.toString()}`);
-          }
-          
-          console.log(`Normalized URL: "${url}" -> "${result.toString()}"`);
-          return result.toString();
+          // Handle relative URLs
+          const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+          return new URL(url, base).toString();
           
         } catch (error) {
-          console.warn(`Invalid URL: "${url}" with base "${baseUrl}"`, error);
-          return null;
-        }
-      };
-
-      // Function to check if two strings are similar (case-insensitive, ignores whitespace)
-      const isSimilarContent = (str1: string, str2: string, length = 50): boolean => {
-        if (!str1 || !str2) return false;
-        const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
-        const norm1 = normalize(str1).substring(0, length);
-        const norm2 = normalize(str2).substring(0, length);
-        return norm1 === norm2 && norm1.length > 10; // Ensure minimum length for meaningful comparison
-      };
-
-      // Function to add an article without duplicate checking
-      const addArticle = (article: { title: string; content: string; originalAddress: string; publicationDate: number }) => {
-        try {
-          // Skip if title is too short or missing
-          if (!article.title || article.title.trim().length < 5) {
-            console.log('Skipping article: Title too short or missing');
-            return false;
-          }
-          
-          // Normalize and validate URL
-          const normalizedUrl = normalizeUrl(article.originalAddress, args.url);
-          if (!normalizedUrl) {
-            console.log(`Skipping article: Invalid or missing URL for "${article.title}"`);
-            return false;
-          }
-          
-          // Update the URL in the article
-          article.originalAddress = normalizedUrl;
-          
-          // Add to articles array for later processing
-          articles.push(article);
-          console.log(`Added article for processing: ${article.title}`);
-          return true;
-        } catch (error) {
-          console.error('Error in addArticle:', error);
-          return false;
+          console.error(`Error resolving URL: ${url} with base ${baseUrl}`, error);
+          return url; // Return original if we can't resolve it
         }
       };
       
-      // Function to remove duplicate articles after parsing
-      const removeDuplicates = (articles: any[]) => {
-        const uniqueArticles: any[] = [];
-        const processedUrls = new Set<string>();
-        const processedTitles = new Set<string>();
-        
-        // Sort by publication date (newest first) to keep the most recent version
-        const sortedArticles = [...articles].sort((a, b) => b.publicationDate - a.publicationDate);
-        
-        for (const article of sortedArticles) {
-          try {
-            const normalizedUrl = article.originalAddress.toLowerCase().split('?')[0].split('#')[0];
-            const normalizedTitle = article.title.toLowerCase().trim();
-            
-            // Extract subtitle if it exists
-            const contentParts = article.content.split('\n\n');
-            const hasSubtitle = contentParts.length > 1;
-            const subtitle = hasSubtitle ? contentParts[1] : '';
-            
-            // Create a unique key for this article
-            const articleKey = `${normalizedUrl}-${normalizedTitle.substring(0, 50)}`;
-            
-            // Check for duplicates
-            const isDuplicate = Array.from(processedUrls).some(url => {
-              // Check URL similarity
-              if (url === normalizedUrl) return true;
-              
-              // Check if this is a similar URL (same path but different params)
-              const url1 = new URL(url);
-              const url2 = new URL(normalizedUrl);
-              if (url1.pathname === url2.pathname && url1.hostname === url2.hostname) {
-                return true;
-              }
-              
-              return false;
-            }) || Array.from(processedTitles).some(title => {
-              // Check title similarity
-              if (isSimilarContent(title, normalizedTitle, 40)) return true;
-              
-              // Check if subtitle matches another title
-              if (hasSubtitle && isSimilarContent(subtitle, title, 40)) return true;
-              
-              return false;
-            });
-            
-            if (!isDuplicate) {
-              uniqueArticles.push(article);
-              processedUrls.add(normalizedUrl);
-              processedTitles.add(normalizedTitle);
-              
-              // Also add the subtitle as a title for future comparisons
-              if (hasSubtitle) {
-                processedTitles.add(subtitle.toLowerCase().trim());
-              }
-            } else {
-              console.log(`Removing duplicate article: ${article.title}`);
-            }
-          } catch (error) {
-            console.error('Error processing article for deduplication:', error);
-            // Keep the article if there was an error processing it
-            uniqueArticles.push(article);
-          }
-        }
-        
-        console.log(`Removed ${articles.length - uniqueArticles.length} duplicate articles`);
-        return uniqueArticles;
-      };
+      // Track the base URL of the feed
+      const feedBaseUrl = new URL(args.url);
+      feedBaseUrl.pathname = ''; // Remove path to get the base URL
+      const cleanBaseUrl = feedBaseUrl.toString().replace(/\/$/, ''); // Remove trailing slash
       
-      // Function to validate if a date is reasonable (not in the future and not too old)
-      const isValidDate = (timestamp: number): boolean => {
-        const now = Date.now();
-        const oneYearAgo = now - (365 * 24 * 60 * 60 * 1000);
-        const oneDayInFuture = now + (24 * 60 * 60 * 1000);
-        
-        return timestamp > oneYearAgo && timestamp < oneDayInFuture;
-      };
+      console.log(`Feed base URL: ${cleanBaseUrl}`);
 
-      // Function to parse date from various formats with detailed logging
-      const parseArticleDate = ($element: any): number | null => {
-        const logPrefix = '[Date Parse]';
-        
-        try {
-          // 1. Try to get date from datetime attribute (most reliable)
-          const dateTime = $element.attr('datetime');
-          if (dateTime) {
-            console.log(`${logPrefix} Found datetime attribute: ${dateTime}`);
-            const date = new Date(dateTime);
-            const timestamp = date.getTime();
-            if (!isNaN(timestamp) && isValidDate(timestamp)) {
-              console.log(`${logPrefix} Successfully parsed from datetime: ${dateTime} -> ${new Date(timestamp).toISOString()}`);
-              return timestamp;
-            }
-            console.log(`${logPrefix} Invalid datetime format: ${dateTime}`);
-          }
-          
-          // 2. Try to parse from text content
-          const dateText = $element.text().trim();
-          if (dateText) {
-            console.log(`${logPrefix} Trying to parse date from text: "${dateText}"`);
-            
-            // Try various date formats with different parsing strategies
-            const parseAttempts = [
-              // ISO 8601 formats
-              () => new Date(dateText),
-              // Common date strings
-              () => new Date(dateText.replace(/(\d+)(st|nd|rd|th)/, '$1')), // Handle "1st", "2nd", etc.
-              // Custom formats
-              () => {
-                const match = dateText.match(/(\d{4})-(\d{1,2})-(\d{1,2})/); // YYYY-MM-DD
-                return match ? new Date(`${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`) : null;
-              },
-              () => {
-                const match = dateText.match(/([A-Za-z]+) (\d{1,2}),? (\d{4})/); // Month DD, YYYY
-                return match ? new Date(`${match[1]} ${match[2]}, ${match[3]}`) : null;
-              },
-              // Relative dates (e.g., "2 days ago")
-              () => {
-                const match = dateText.match(/(\d+) (day|week|month|year)s? ago/i);
-                if (!match) return null;
-                const amount = parseInt(match[1]);
-                const unit = match[2].toLowerCase();
-                const date = new Date();
-                
-                switch(unit) {
-                  case 'day': date.setDate(date.getDate() - amount); break;
-                  case 'week': date.setDate(date.getDate() - (amount * 7)); break;
-                  case 'month': date.setMonth(date.getMonth() - amount); break;
-                  case 'year': date.setFullYear(date.getFullYear() - amount); break;
-                }
-                
-                return date;
-              }
-            ];
-            
-            for (const parseFn of parseAttempts) {
-              try {
-                const date = parseFn();
-                if (date && !isNaN(date.getTime())) {
-                  const timestamp = date.getTime();
-                  if (isValidDate(timestamp)) {
-                    console.log(`${logPrefix} Successfully parsed: "${dateText}" -> ${new Date(timestamp).toISOString()}`);
-                    return timestamp;
-                  }
-                }
-              } catch (e) {
-                // Silently continue to next parsing attempt
-                continue;
-              }
-            }
-          }
-          
-          // 3. Try to find a date in parent elements
-          const parentDate = $element.parents().map((i: number, el: any) => {
-            const $el = $(el);
-            const dt = $el.attr('datetime');
-            if (dt) {
-              const d = new Date(dt);
-              if (!isNaN(d.getTime()) && isValidDate(d.getTime())) {
-                console.log(`${logPrefix} Found date in parent element: ${dt}`);
-                return d.getTime();
-              }
-            }
-            return null;
-          }).get().find((d: any) => d !== null);
-          
-          if (parentDate) return parentDate;
-          
-          console.warn(`${logPrefix} Could not parse valid date from element or its parents`);
-          return null;
-          
-        } catch (error) {
-          console.error(`${logPrefix} Error parsing date:`, error);
-          return null;
-        }
-      };
-      
       // Special case for Last Week in AI
       if (args.url.includes('lastweekin.ai')) {
         console.log('Detected Last Week in AI website, using specialized parsing');
         
-        // Find all article containers
+        // Find all article containers - each article is in a div with role="article"
         const articleContainers = $('div[role="article"]');
         console.log(`Found ${articleContainers.length} article containers`);
+        
+        // Track processed URLs to avoid duplicates
+        const processedUrls = new Set<string>();
         
         articleContainers.each((index, container) => {
           try {
@@ -409,188 +126,100 @@ export const parseHtmlPage = internalAction({
             
             // Find the main article link using data-testid
             const $mainLink = $container.find('a[data-testid="post-preview-title"]');
-            if ($mainLink.length === 0) {
-              console.log('Skipping container: No title link found');
-              return; // Skip if no title link found
-            }
-            
             let href = $mainLink.attr('href') || '';
-            const title = $mainLink.text().trim();
+            let title = $mainLink.text().trim();
             
             // Skip if no valid title or URL
-            if (!title || !href) {
-              console.log(`Skipping article: Missing title or URL (Title: ${title}, URL: ${href})`);
+            if (!title || title.length < 5 || !href) return;
+            
+            // Resolve the URL against the feed's base URL
+            const fullUrl = resolveUrl(href, cleanBaseUrl);
+            
+            // Skip if the URL is just the base URL
+            if (fullUrl === cleanBaseUrl) {
+              console.log(`Skipping article with URL matching base: ${fullUrl}`);
               return;
             }
             
-            // Ensure the URL is absolute
-            if (href && !href.startsWith('http')) {
-              href = new URL(href, args.url).toString();
-            }
+            console.log(`Resolved URL: ${href} -> ${fullUrl}`);
             
-            // Skip if URL is just the base URL
-            const cleanHref = href.split('?')[0].split('#')[0];
-            if (cleanHref === args.url || cleanHref === `${args.url}/`) {
-              console.log(`Skipping article: URL is the same as base URL (${cleanHref})`);
-              return;
-            }
+            // Skip if we've already processed this URL
+            if (processedUrls.has(fullUrl)) return;
+            processedUrls.add(fullUrl);
             
+            // Find the subtitle (in the next div after the title's parent div)
             let subtitle = '';
-            const $subtitle = $container.find('div:has(> a[data-testid="post-preview-title"])')
-              .next('div')
-              .find('a')
-              .first();
-              
+            const $subtitle = $mainLink.closest('div').next('div').find('a').first();
             if ($subtitle.length > 0) {
               subtitle = $subtitle.text().trim();
               console.log(`Found subtitle: ${subtitle}`);
             }
             
             // Combine title and subtitle for the content
-            const content = subtitle ? `${title}\n\n${subtitle}` : title;
+            let content = title;
+            if (subtitle) {
+              content = `${title}\n\n${subtitle}`;
+            }
             
             // Find the publication date in the time element
             let publicationDate: number | null = null;
             
-            // 1. First try to get date from datetime attribute (most reliable)
-            const $timeElement = $container.find('time[datetime]');
-            console.log('Looking for time element with datetime attribute');
-            
-            if ($timeElement.length > 0) {
-              const dateString = $timeElement.attr('datetime');
-              console.log(`Found datetime attribute: ${dateString}`);
-              
+            // First try to get the date from the datetime attribute
+            const $dateElement = $container.find('time[datetime]');
+            if ($dateElement.length > 0) {
+              const dateString = $dateElement.attr('datetime');
               if (dateString) {
-                try {
-                  const date = new Date(dateString);
-                  if (!isNaN(date.getTime())) {
-                    publicationDate = date.getTime();
-                    console.log(`Successfully parsed date from datetime: ${dateString} -> ${new Date(publicationDate).toISOString()}`);
-                    
-                    // Add fallback to check if the time element's text contains a date
-                    const timeText = $timeElement.text().trim();
-                    if (timeText) {
-                      console.log(`Time element text: "${timeText}"`);
-                      const textDate = parseArticleDate($timeElement);
-                      if (textDate && textDate !== publicationDate) {
-                        console.log(`Found different date in time text: ${new Date(textDate).toISOString()}`);
-                      }
-                    }
-                  } else {
-                    console.warn(`Invalid date format in datetime: ${dateString}`);
-                  }
-                } catch (e) {
-                  console.warn(`Failed to parse datetime: ${dateString}`, e);
-                }
-              } else {
-                console.warn('Empty datetime attribute found');
+                publicationDate = new Date(dateString).getTime();
+                console.log(`Found date from datetime: ${dateString} -> ${publicationDate}`);
               }
-            } else {
-              console.log('No time element with datetime attribute found');
             }
             
-            // 2. Try to parse from time element's text content if datetime attribute wasn't found
-            if (!publicationDate) {
-              console.log('Trying to find date in time element text content');
-              const $timeElements = $container.find('time');
-              console.log(`Found ${$timeElements.length} time elements`);
-              
-              for (let i = 0; i < $timeElements.length; i++) {
-                const $timeText = $($timeElements[i]);
-                // Skip if this is the same element we already checked for datetime attribute
-                if ($timeText.is($timeElement)) continue;
-                
-                const dateText = $timeText.text().trim();
-                if (!dateText) continue;
-                
-                console.log(`Checking time element #${i + 1} with text: "${dateText}"`);
-                
-                // Try parsing with our main date parser first
-                const parsedDate = parseArticleDate($timeText);
-                if (parsedDate) {
+            // If no valid date found, look for date text in time element
+            if (!publicationDate || isNaN(publicationDate)) {
+              const $dateTextElement = $container.find('time').first();
+              if ($dateTextElement.length > 0) {
+                const dateText = $dateTextElement.text().trim();
+                console.log(`Found date text: ${dateText}`);
+                // Try to parse the date text (e.g., 'May 18')
+                const dateMatch = dateText.match(/([A-Za-z]+ \d{1,2})/);
+                if (dateMatch) {
+                  const dateString = `${dateMatch[0]}, ${new Date().getFullYear()} 12:00:00 UTC`;
+                  publicationDate = new Date(dateString).getTime();
+                  console.log(`Parsed date from text: ${dateString} -> ${publicationDate}`);
+                }
+              }
+            }
+            
+            // If still no date, try to find a timestamp in the URL
+            if (!publicationDate && href) {
+              const dateMatch = href.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+              if (dateMatch) {
+                const [_, year, month, day] = dateMatch;
+                const dateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00Z`;
+                const parsedDate = new Date(dateString).getTime();
+                if (!isNaN(parsedDate)) {
                   publicationDate = parsedDate;
-                  console.log(`Successfully parsed date from time text: ${dateText} -> ${new Date(publicationDate).toISOString()}`);
-                  break;
                 }
-                
-                // Fallback to direct parsing
-                try {
-                  // Try common date formats
-                  const date = new Date(dateText);
-                  if (!isNaN(date.getTime())) {
-                    publicationDate = date.getTime();
-                    console.log(`Directly parsed date from text: ${dateText} -> ${new Date(publicationDate).toISOString()}`);
-                    break;
-                  }
-                } catch (e) {
-                  console.warn(`Failed to directly parse date: ${dateText}`, e);
-                }
-              }
-              
-              if (!publicationDate) {
-                console.log('No valid date found in time elements');
               }
             }
             
-            // 3. Look for dates in other common elements if still not found
-            if (!publicationDate) {
-              console.log('Trying to find date in other common elements');
-              const possibleDateContainers = [
-                { selector: '[class*="date"]', desc: 'element with "date" in class' },
-                { selector: '[class*="time"]', desc: 'element with "time" in class' },
-                { selector: 'time', desc: 'any time element' },
-                { selector: 'span', desc: 'span elements' },
-                { selector: 'div', desc: 'div elements' }
-              ];
-              
-              for (const container of possibleDateContainers) {
-                console.log(`Looking for dates in ${container.desc}`);
-                const $elements = $container.find(container.selector);
-                console.log(`Found ${$elements.length} ${container.desc} elements`);
-                
-                for (let i = 0; i < Math.min($elements.length, 10); i++) {
-                  const $el = $($elements[i]);
-                  const text = $el.text().trim();
-                  if (!text || text.length > 50) continue; // Skip long text that's probably not a date
-                  
-                  console.log(`Checking element #${i + 1} with text: "${text}"`);
-                  const parsedDate = parseArticleDate($el);
-                  if (parsedDate) {
-                    publicationDate = parsedDate;
-                    console.log(`Found date in ${container.desc}: ${text} -> ${new Date(publicationDate).toISOString()}`);
-                    break;
-                  }
-                }
-                
-                if (publicationDate) break;
-              }
-            }
-            
-            // 4. If still no valid date, use current date at noon UTC as fallback
+            // If still no date, use the current date at noon UTC (as a last resort)
             if (!publicationDate) {
               const today = new Date();
               today.setUTCHours(12, 0, 0, 0);
               publicationDate = today.getTime();
-              console.warn('Using current date as fallback - no valid date found in article');
             }
             
-            // Ensure the date is a valid number for Convex
-            if (isNaN(publicationDate)) {
-              console.warn('Invalid publication date, using current date');
-              publicationDate = Date.now();
-            }
-            
-            // Add the article using our deduplication function
-            const added = addArticle({
+            // Add the article
+            articles.push({
               title: title,
               content: content,
-              originalAddress: href, // Use the processed href variable
+              originalAddress: fullUrl,
               publicationDate: publicationDate,
             });
             
-            if (added) {
-              console.log(`Added article: ${title}`);
-            }
+            console.log(`Parsed article: ${title} (${new Date(publicationDate).toISOString()})`);
+            
           } catch (error) {
             console.error('Error parsing article section:', error);
           }
@@ -598,13 +227,9 @@ export const parseHtmlPage = internalAction({
         
         console.log(`Successfully parsed ${articles.length} articles`);
         
-        // Remove duplicates before returning
-        const uniqueArticles = removeDuplicates(articles);
-        
-        // Return unique articles if we found any
-        if (uniqueArticles.length > 0) {
-          console.log(`Returning ${uniqueArticles.length} unique articles`);
-          return uniqueArticles;
+        // Return articles if we found any
+        if (articles.length > 0) {
+          return articles;
         }
       }
       
@@ -693,7 +318,7 @@ export const parseHtmlPage = internalAction({
                 publicationDate = new Date(dateString).getTime();
               }
               
-              addArticle({
+              articles.push({
                 title: title,
                 content: content.trim() || title,
                 originalAddress: link,
