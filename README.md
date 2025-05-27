@@ -1,47 +1,103 @@
-## Overview
+# KITE Aggregator
 
-This project uses the following tech stack:
-- Next.js 15 (for client framework)
-- React 19 (for frontend components)
-- Tailwind v4 (for styling)
-- Shadcn UI (for UI components library)
-- Lucide Icons (for icons)
-- Convex (for backend & database)
-- Framer Motion (for animations)
+A modern, intelligent content aggregation platform with client-side authentication, built with Next.js, Convex, and TypeScript.
 
-All relevant files live in the 'src' directory.
+## ✨ Features
 
-## Setup
+- **Client-Side Authentication**: Secure login system with password protection
+- **Static Site Generation**: Optimized for GitHub Pages deployment
+- **Responsive Design**: Works on all device sizes
+- **Modern UI**: Built with Tailwind CSS and Shadcn UI components
+- **Real-time Updates**: Powered by Convex backend
 
-This project is set up already and running on a cloud environment.
+## 🚀 Tech Stack
 
-To set it up yourself:
+- **Frontend**: Next.js 15, React 19, TypeScript
+- **Styling**: Tailwind CSS v4, Shadcn UI
+- **Icons**: Lucide Icons
+- **Backend**: Convex (database & serverless functions)
+- **Animations**: Framer Motion
+- **Deployment**: GitHub Pages
+
+## 🛠️ Setup
 
 1. Clone the repository
-2. Run `pnpm install` to install the dependencies
-3. Run `pnpm dev` to start the development server
-4. Run `npx convex dev` to start the Convex development server
+   ```bash
+   git clone https://github.com/your-username/KITE-Aggregator.git
+   cd KITE-Aggregator
+   ```
 
-Running the convex development server is critical for ensuring the backend convex functions are correctly updating.
+2. Install dependencies
+   ```bash
+   pnpm install
+   ```
 
-## Deploying to GitHub Pages
+3. Set up environment variables
+   ```bash
+   cp .env.local.example .env.local
+   ```
+   Edit `.env.local` with your configuration.
 
-This project can be deployed to GitHub Pages with the following steps:
+4. Start the development server
+   ```bash
+   pnpm dev
+   ```
 
-1. Fork or push this repository to your GitHub account
-2. Set up the following secret in your GitHub repository settings:
-   - `NEXT_PUBLIC_CONVEX_URL`: Your Convex deployment URL (from .env.local)
-3. Enable GitHub Pages in your repository settings:
-   - Go to Settings > Pages
-   - Set the source to 'GitHub Actions'
-4. Push to the main branch or manually trigger the workflow
-5. Your site will be deployed to `https://[your-username].github.io/kite-aggregator/`
+5. (Optional) Start Convex development server
+   ```bash
+   npx convex dev
+   ```
 
-**Note**: Since this is a static export, you'll need an active Convex deployment for the backend functionality to work.
+## 🔒 Authentication
 
-## Environment Variables
+This application uses client-side authentication with the following default credentials:
 
-The project is set up with project specific CONVEX_DEPLOYMENT and NEXT_PUBLIC_CONVEX_URL environment variables on the client side.
+- **Password**: The password is set in your `.env.local` file as `ADMIN_PASSWORD`
+
+To change the password, update the `ADMIN_PASSWORD` in your `.env.local` file.
+
+## 🚀 Deploying to GitHub Pages
+
+1. Push your code to a GitHub repository
+2. Go to the repository Settings > Pages
+3. Configure GitHub Pages:
+   - Source: GitHub Actions
+   - Branch: main/master
+4. The GitHub Actions workflow will automatically deploy your site to `https://[your-username].github.io/KITE-Aggregator/`
+
+## 🌐 Environment Variables
+
+Create a `.env.local` file with the following variables:
+
+```env
+# Client-side authentication
+ADMIN_PASSWORD=your_secure_password_here
+
+# Environment (development, production)
+NODE_ENV=development
+
+# GitHub Pages deployment
+GITHUB_ACTIONS=false
+NEXT_PUBLIC_BASE_PATH=
+```
+
+## 📂 Project Structure
+
+```
+src/
+├── app/                 # Next.js app router
+├── components/          # Reusable UI components
+├── contexts/            # React context providers
+└── lib/                 # Utility functions and configurations
+```
+
+## 📝 Notes
+
+- This application uses static site generation for GitHub Pages compatibility
+- Authentication is handled client-side using localStorage
+- For production use, consider implementing a more secure authentication method
+- The application is configured to work with GitHub Pages base path (`/KITE-Aggregator`)
+- Running the Convex development server is recommended during development for full backend functionality
 
 # KITE Aggregator
 

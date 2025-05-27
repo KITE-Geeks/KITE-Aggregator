@@ -1,33 +1,28 @@
 import type { NextConfig } from "next";
 
+const isGithubActions = process.env.GITHUB_ACTIONS === 'true';
+const repo = 'KITE-Aggregator';
+const assetPrefix = isGithubActions ? `/${repo}/` : '';
+const basePath = isGithubActions ? `/${repo}` : '';
+
 const nextConfig: NextConfig = {
   /* config options here */
   eslint: {
     ignoreDuringBuilds: true,
   },
-  allowedDevOrigins: [
-    "*.csb.app",
-    "*.vly.sh",
-    "localhost",
-    "127.0.0.1",
-    "*.vly.ai",
-    "vly.ai",
-  ],
+  // Enable static export for GitHub Pages
+  output: 'export',
+  // Set base path for GitHub Pages
+  assetPrefix,
+  basePath,
+  // Enable React Strict Mode for better development practices
+  reactStrictMode: true,
+  // Disable image optimization for static export
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "**",
-      },
-      {
-        protocol: "http",
-        hostname: "**",
-      },
-    ],
     unoptimized: true,
   },
-  output: 'export',
-  basePath: process.env.NODE_ENV === 'production' ? '/KITE-Aggregator' : '',
+  // Handle client-side routing
+  trailingSlash: true,
 };
 
 export default nextConfig;

@@ -1,6 +1,10 @@
+'use client';
+
 import { ConvexClientProvider } from "@/app/ConvexClientProvider";
-import type { Metadata } from "next";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { Geist, Geist_Mono } from "next/font/google";
+import { usePathname } from 'next/navigation';
+import ProtectedRoute from "@/components/ProtectedRoute";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,26 +17,31 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Blog Manager - Cooked on crack.diy",
-  description: "Manage your blog content and RSS feeds with ease",
-  icons: {
-    icon: "/favicon_crack_light.png",
-  },
-};
+// Public paths that don't require authentication
+const publicPaths = ['/login'];
 
-// ROOT LAYOUT. Do not touch this file
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const pathname = usePathname();
+  const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
+
   return (
     <html lang="en" className="dark">
+      <head>
+        <title>KITE Aggregator</title>
+        <link rel="icon" href="/favicon_crack_light.png" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background`}
       >
-        <ConvexClientProvider>{children}</ConvexClientProvider>
+        <AuthProvider>
+          <ConvexClientProvider>
+            {isPublicPath ? children : <ProtectedRoute>{children}</ProtectedRoute>}
+          </ConvexClientProvider>
+        </AuthProvider>
       </body>
     </html>
   );
