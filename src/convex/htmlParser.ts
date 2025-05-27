@@ -74,12 +74,12 @@ export const parseHtmlPage = internalAction({
       if (args.url.includes('lastweekin.ai')) {
         console.log('Detected Last Week in AI website, using specialized parsing');
         
-        // Find all article containers - each article is in a div with role="article"
+        // Find all article containers
         const articleContainers = $('div[role="article"]');
         console.log(`Found ${articleContainers.length} article containers`);
         
-        // Track processed URLs to avoid duplicates
-        const processedUrls = new Set<string>();
+        // Track processed articles using a composite key of title + first 50 chars of subtitle
+        const processedArticleKeys = new Set<string>();
         
         articleContainers.each((index, container) => {
           try {
@@ -87,8 +87,10 @@ export const parseHtmlPage = internalAction({
             
             // Find the main article link using data-testid
             const $mainLink = $container.find('a[data-testid="post-preview-title"]');
+            if ($mainLink.length === 0) return; // Skip if no title link found
+            
             const href = $mainLink.attr('href') || '';
-            let title = $mainLink.text().trim();
+            const title = $mainLink.text().trim();
             
             // Skip if no valid title or URL
             if (!title || title.length < 5 || !href) return;
@@ -96,71 +98,112 @@ export const parseHtmlPage = internalAction({
             // Make URL absolute
             const fullUrl = href.startsWith('http') ? href : new URL(href, args.url).toString();
             
-            // Skip if we've already processed this URL
-            if (processedUrls.has(fullUrl)) return;
-            processedUrls.add(fullUrl);
-            
-            // Find the subtitle (in the next div after the title's parent div)
+            // Find the subtitle
             let subtitle = '';
-            const $subtitle = $mainLink.closest('div').next('div').find('a').first();
+            const $subtitle = $container.find('div:has(> a[data-testid="post-preview-title"])')
+              .next('div')
+              .find('a')
+              .first();
+              
             if ($subtitle.length > 0) {
               subtitle = $subtitle.text().trim();
               console.log(`Found subtitle: ${subtitle}`);
             }
             
-            // Combine title and subtitle for the content
-            let content = title;
-            if (subtitle) {
-              content = `${title}\n\n${subtitle}`;
+            // Create a unique key using both title and first 50 chars of subtitle
+            const articleKey = `${title}|${subtitle.substring(0, 50).trim()}`;
+            
+            // Skip if we've already processed this exact article
+            if (processedArticleKeys.has(articleKey)) {
+              console.log(`Skipping duplicate article: ${title}`);
+              return;
             }
+            processedArticleKeys.add(articleKey);
+            
+            // Combine title and subtitle for the content
+            const content = subtitle ? `${title}\n\n${subtitle}` : title;
             
             // Find the publication date in the time element
             let publicationDate: number | null = null;
             
-            // First try to get the date from the datetime attribute
-            const $dateElement = $container.find('time[datetime]');
-            if ($dateElement.length > 0) {
-              const dateString = $dateElement.attr('datetime');
+            // 1. First try to get date from datetime attribute (most reliable)
+            const $timeElement = $container.find('time[datetime]');
+            if ($timeElement.length > 0) {
+              const dateString = $timeElement.attr('datetime');
               if (dateString) {
-                publicationDate = new Date(dateString).getTime();
-                console.log(`Found date from datetime: ${dateString} -> ${publicationDate}`);
+                try {
+                  const date = new Date(dateString);
+                  if (!isNaN(date.getTime())) {
+                    publicationDate = date.getTime();
+                    console.log(`Found date from datetime: ${dateString} -> ${publicationDate} (${new Date(publicationDate).toISOString()})`);
+                  }
+                } catch (e) {
+                  console.warn(`Failed to parse datetime: ${dateString}`, e);
+                }
               }
             }
             
-            // If no valid date found, look for date text in time element
-            if (!publicationDate || isNaN(publicationDate)) {
-              const $dateTextElement = $container.find('time').first();
-              if ($dateTextElement.length > 0) {
-                const dateText = $dateTextElement.text().trim();
+            // 2. Try to parse from time element's text content
+            if (!publicationDate) {
+              const $timeText = $container.find('time').first();
+              if ($timeText.length > 0) {
+                const dateText = $timeText.text().trim();
                 console.log(`Found date text: ${dateText}`);
-                // Try to parse the date text (e.g., 'May 18')
-                const dateMatch = dateText.match(/([A-Za-z]+ \d{1,2})/);
-                if (dateMatch) {
-                  const dateString = `${dateMatch[0]}, ${new Date().getFullYear()} 12:00:00 UTC`;
-                  publicationDate = new Date(dateString).getTime();
-                  console.log(`Parsed date from text: ${dateString} -> ${publicationDate}`);
+                
+                // Try various date formats
+                const dateFormats = [
+                  // ISO 8601 format (e.g., 2025-05-18T01:59:34.341Z)
+                  /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z?)/,
+                  // Month Day, Year (e.g., May 18, 2025)
+                  /([A-Za-z]+ \d{1,2},? \d{4})/,
+                  // Month Day (e.g., May 18) - assumes current year
+                  /([A-Za-z]+ \d{1,2})/,
+                  // YYYY-MM-DD (e.g., 2025-05-18)
+                  /(\d{4}-\d{2}-\d{2})/
+                ];
+                
+                for (const format of dateFormats) {
+                  const match = dateText.match(format);
+                  if (match) {
+                    try {
+                      let dateString = match[0];
+                      
+                      // If we only have month and day, add current year
+                      if (dateString.match(/^[A-Za-z]+ \d{1,2}$/)) {
+                        dateString = `${dateString}, ${new Date().getFullYear()}`;
+                      }
+                      
+                      // If we don't have a time, set to noon UTC
+                      if (!dateString.includes('T') && !dateString.includes(':')) {
+                        dateString += 'T12:00:00Z';
+                      }
+                      
+                      const date = new Date(dateString);
+                      if (!isNaN(date.getTime())) {
+                        publicationDate = date.getTime();
+                        console.log(`Parsed date from text (${format}): ${dateString} -> ${publicationDate} (${new Date(publicationDate).toISOString()})`);
+                        break;
+                      }
+                    } catch (e) {
+                      console.warn(`Failed to parse date: ${match[0]}`, e);
+                    }
+                  }
                 }
               }
             }
             
-            // If still no date, try to find a timestamp in the URL
-            if (!publicationDate && href) {
-              const dateMatch = href.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-              if (dateMatch) {
-                const [_, year, month, day] = dateMatch;
-                const dateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00Z`;
-                const parsedDate = new Date(dateString).getTime();
-                if (!isNaN(parsedDate)) {
-                  publicationDate = parsedDate;
-                }
-              }
-            }
-            
-            // If still no date, use the current date at noon UTC (as a last resort)
+            // 3. If still no valid date, use current date at noon UTC as fallback
             if (!publicationDate) {
               const today = new Date();
               today.setUTCHours(12, 0, 0, 0);
               publicationDate = today.getTime();
+              console.log('Using current date as fallback');
+            }
+            
+            // Ensure the date is a valid number for Convex
+            if (isNaN(publicationDate)) {
+              console.warn('Invalid publication date, using current date');
+              publicationDate = Date.now();
             }
             
             // Add the article
@@ -171,7 +214,7 @@ export const parseHtmlPage = internalAction({
               publicationDate: publicationDate,
             });
             
-            console.log(`Parsed article: ${title} (${new Date(publicationDate).toISOString()})`);
+            console.log(`Added article: ${title}`);
             
           } catch (error) {
             console.error('Error parsing article section:', error);
