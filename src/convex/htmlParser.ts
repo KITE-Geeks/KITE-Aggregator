@@ -70,6 +70,37 @@ export const parseHtmlPage = internalAction({
       const $ = cheerio.load(html);
       const articles: any[] = [];
       
+      // Track all processed articles using URL as the primary key
+      const processedArticleUrls = new Set<string>();
+      
+      // Function to add an article with deduplication
+      const addArticle = (article: { title: string; content: string; originalAddress: string; publicationDate: number }) => {
+        // Normalize URL for comparison
+        const normalizedUrl = article.originalAddress.split('?')[0].split('#')[0];
+        
+        // Skip if we've already processed this URL
+        if (processedArticleUrls.has(normalizedUrl)) {
+          console.log(`Skipping duplicate article URL: ${normalizedUrl}`);
+          return false;
+        }
+        
+        // Skip if we already have an article with the same title and similar content
+        const existingArticle = articles.find(a => 
+          a.title === article.title && 
+          a.content.substring(0, 50) === article.content.substring(0, 50)
+        );
+        
+        if (existingArticle) {
+          console.log(`Skipping duplicate article: ${article.title}`);
+          return false;
+        }
+        
+        // Add to processed URLs and articles
+        processedArticleUrls.add(normalizedUrl);
+        articles.push(article);
+        return true;
+      };
+      
       // Special case for Last Week in AI
       if (args.url.includes('lastweekin.ai')) {
         console.log('Detected Last Week in AI website, using specialized parsing');
@@ -77,9 +108,6 @@ export const parseHtmlPage = internalAction({
         // Find all article containers
         const articleContainers = $('div[role="article"]');
         console.log(`Found ${articleContainers.length} article containers`);
-        
-        // Track processed articles using a composite key of title + first 50 chars of subtitle
-        const processedArticleKeys = new Set<string>();
         
         articleContainers.each((index, container) => {
           try {
@@ -109,16 +137,6 @@ export const parseHtmlPage = internalAction({
               subtitle = $subtitle.text().trim();
               console.log(`Found subtitle: ${subtitle}`);
             }
-            
-            // Create a unique key using both title and first 50 chars of subtitle
-            const articleKey = `${title}|${subtitle.substring(0, 50).trim()}`;
-            
-            // Skip if we've already processed this exact article
-            if (processedArticleKeys.has(articleKey)) {
-              console.log(`Skipping duplicate article: ${title}`);
-              return;
-            }
-            processedArticleKeys.add(articleKey);
             
             // Combine title and subtitle for the content
             const content = subtitle ? `${title}\n\n${subtitle}` : title;
@@ -200,22 +218,31 @@ export const parseHtmlPage = internalAction({
               console.log('Using current date as fallback');
             }
             
+            // 3. If still no valid date, use current date at noon UTC as fallback
+            if (!publicationDate) {
+              const today = new Date();
+              today.setUTCHours(12, 0, 0, 0);
+              publicationDate = today.getTime();
+              console.log('Using current date as fallback');
+            }
+            
             // Ensure the date is a valid number for Convex
             if (isNaN(publicationDate)) {
               console.warn('Invalid publication date, using current date');
               publicationDate = Date.now();
             }
             
-            // Add the article
-            articles.push({
+            // Add the article using our deduplication function
+            const added = addArticle({
               title: title,
               content: content,
               originalAddress: fullUrl,
               publicationDate: publicationDate,
             });
             
-            console.log(`Added article: ${title}`);
-            
+            if (added) {
+              console.log(`Added article: ${title}`);
+            }
           } catch (error) {
             console.error('Error parsing article section:', error);
           }
@@ -314,7 +341,7 @@ export const parseHtmlPage = internalAction({
                 publicationDate = new Date(dateString).getTime();
               }
               
-              articles.push({
+              addArticle({
                 title: title,
                 content: content.trim() || title,
                 originalAddress: link,
