@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 
 const PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const SESSION_COOKIE = 'kite-auth';
-const SESSION_SECRET = process.env.SESSION_SECRET || 'your-secret-key';
 
 export async function POST(request: Request) {
   try {
@@ -16,8 +14,13 @@ export async function POST(request: Request) {
         timestamp: Date.now(),
       };
       
-      // Set a cookie that expires in 7 days
-      cookies().set(SESSION_COOKIE, JSON.stringify(sessionData), {
+      // Create response with success message
+      const response = NextResponse.json({ success: true });
+      
+      // Set cookie in the response
+      response.cookies.set({
+        name: SESSION_COOKIE,
+        value: JSON.stringify(sessionData),
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
@@ -25,7 +28,7 @@ export async function POST(request: Request) {
         maxAge: 60 * 60 * 24 * 7, // 1 week
       });
       
-      return NextResponse.json({ success: true });
+      return response;
     }
     
     return NextResponse.json(
@@ -33,6 +36,7 @@ export async function POST(request: Request) {
       { status: 401 }
     );
   } catch (error) {
+    console.error('Login error:', error);
     return NextResponse.json(
       { success: false, error: 'An error occurred' },
       { status: 500 }
