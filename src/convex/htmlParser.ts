@@ -70,8 +70,20 @@ export const parseHtmlPage = internalAction({
       const $ = cheerio.load(html);
       const articles: any[] = [];
       
+      // Function to track the original source of articles
+      const getArticleSource = (url: string): string => {
+        try {
+          const urlObj = new URL(url);
+          // Return the hostname without www. prefix
+          return urlObj.hostname.replace(/^www\./i, '');
+        } catch (e) {
+          console.error(`Error getting source from URL: ${url}`, e);
+          return 'unknown';
+        }
+      };
+
       // Function to ensure URLs are properly resolved against the base URL
-      const resolveUrl = (url: string, baseUrl: string): string => {
+      const resolveUrl = (url: string, baseUrl: string, options: { forceSourceDomain?: boolean } = {}): string => {
         try {
           if (!url) return '';
           
@@ -94,7 +106,22 @@ export const parseHtmlPage = internalAction({
           
           // Handle relative URLs
           const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-          return new URL(url, base).toString();
+          const resolvedUrl = new URL(url, base).toString();
+          
+          // If we need to force the source domain (for articles from this feed)
+          if (options.forceSourceDomain) {
+            const baseDomain = new URL(baseUrl).hostname.replace(/^www\./i, '');
+            const resolvedDomain = new URL(resolvedUrl).hostname.replace(/^www\./i, '');
+            
+            // If the resolved domain is different from the base domain, log it
+            if (resolvedDomain !== baseDomain) {
+              console.log(`Cross-domain link detected: ${resolvedUrl} (expected domain: ${baseDomain})`);
+              // Keep the original URL structure but ensure it's absolute
+              return resolvedUrl;
+            }
+          }
+          
+          return resolvedUrl;
           
         } catch (error) {
           console.error(`Error resolving URL: ${url} with base ${baseUrl}`, error);
@@ -132,8 +159,18 @@ export const parseHtmlPage = internalAction({
             // Skip if no valid title or URL
             if (!title || title.length < 5 || !href) return;
             
-            // Resolve the URL against the feed's base URL
-            const fullUrl = resolveUrl(href, cleanBaseUrl);
+            // Resolve the URL against the feed's base URL, forcing the source domain
+            const fullUrl = resolveUrl(href, cleanBaseUrl, { forceSourceDomain: true });
+            
+            // Get the source domain for this article
+            const articleSource = getArticleSource(fullUrl);
+            const feedSource = getArticleSource(cleanBaseUrl);
+            
+            // Log if the article source doesn't match the feed source
+            if (articleSource !== feedSource) {
+              console.log(`Article source (${articleSource}) differs from feed source (${feedSource})`);
+              console.log(`Article URL: ${fullUrl}`);
+            }
             
             // Skip if the URL is just the base URL
             if (fullUrl === cleanBaseUrl) {
