@@ -73,32 +73,182 @@ export const parseHtmlPage = internalAction({
       // Track all processed articles using URL as the primary key
       const processedArticleUrls = new Set<string>();
       
+      // Function to validate and normalize URL
+      const normalizeUrl = (url: string, baseUrl: string): string | null => {
+        try {
+          // Skip empty or invalid URLs
+          if (!url || url.trim() === '') return null;
+          
+          // Handle relative URLs
+          const absoluteUrl = url.startsWith('http') ? url : new URL(url, baseUrl).toString();
+          
+          // Remove query parameters and fragments for comparison
+          const urlObj = new URL(absoluteUrl);
+          const cleanUrl = `${urlObj.origin}${urlObj.pathname}`.replace(/\/$/, ''); // Remove trailing slash
+          
+          // Skip if URL is just the base URL
+          if (cleanUrl === baseUrl.replace(/\/$/, '')) return null;
+          
+          return absoluteUrl;
+        } catch (error) {
+          console.warn(`Invalid URL: ${url}`, error);
+          return null;
+        }
+      };
+
+      // Function to check if two strings are similar (case-insensitive, ignores whitespace)
+      const isSimilarContent = (str1: string, str2: string, length = 50): boolean => {
+        const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+        const norm1 = normalize(str1).substring(0, length);
+        const norm2 = normalize(str2).substring(0, length);
+        return norm1 === norm2;
+      };
+
       // Function to add an article with deduplication
       const addArticle = (article: { title: string; content: string; originalAddress: string; publicationDate: number }) => {
-        // Normalize URL for comparison
-        const normalizedUrl = article.originalAddress.split('?')[0].split('#')[0];
-        
-        // Skip if we've already processed this URL
-        if (processedArticleUrls.has(normalizedUrl)) {
-          console.log(`Skipping duplicate article URL: ${normalizedUrl}`);
+        try {
+          // Skip if title is too short or missing
+          if (!article.title || article.title.trim().length < 5) {
+            console.log('Skipping article: Title too short or missing');
+            return false;
+          }
+          
+          // Normalize and validate URL
+          const normalizedUrl = normalizeUrl(article.originalAddress, args.url);
+          if (!normalizedUrl) {
+            console.log(`Skipping article: Invalid or missing URL for "${article.title}"`);
+            return false;
+          }
+          
+          // Update the URL in the article
+          article.originalAddress = normalizedUrl;
+          
+          // Create a unique key based on URL and normalized title
+          const normalizedTitle = article.title.toLowerCase().trim();
+          const articleKey = `${normalizedUrl}-${normalizedTitle.substring(0, 50)}`;
+          
+          // Skip if we've already processed this article
+          if (processedArticleUrls.has(articleKey)) {
+            console.log(`Skipping duplicate article: ${article.title}`);
+            return false;
+          }
+          
+          // Extract subtitle if it exists in the content (format is "title\n\nsubtitle")
+          const contentParts = article.content.split('\n\n');
+          const hasSubtitle = contentParts.length > 1;
+          const subtitle = hasSubtitle ? contentParts[1] : '';
+          
+          // Check for similar articles using multiple criteria
+          const isDuplicate = articles.some(a => {
+            // Same URL is always a duplicate
+            if (a.originalAddress === normalizedUrl) return true;
+            
+            // Extract subtitle from existing article
+            const aContentParts = a.content.split('\n\n');
+            const aHasSubtitle = aContentParts.length > 1;
+            const aSubtitle = aHasSubtitle ? aContentParts[1] : '';
+            
+            // 1. Check if titles are similar
+            const titlesSimilar = isSimilarContent(a.title, article.title, 40);
+            
+            // 2. Check if content is similar (first 100 chars)
+            const contentSimilar = isSimilarContent(a.content, article.content, 100);
+            
+            // 3. Check if subtitles are similar (if both articles have them)
+            const subtitlesSimilar = hasSubtitle && aHasSubtitle && 
+                                   isSimilarContent(aSubtitle, subtitle, 60);
+            
+            // 4. Check if current subtitle matches another article's title or vice versa
+            const subtitleMatchesTitle = (hasSubtitle && isSimilarContent(subtitle, a.title, 40)) ||
+                                      (aHasSubtitle && isSimilarContent(aSubtitle, article.title, 40));
+            
+            // Consider it a duplicate if:
+            // - Titles are similar AND (content is similar OR subtitles are similar)
+            // - OR content is very similar (first 200 chars)
+            // - OR subtitle matches another article's title or vice versa
+            return (titlesSimilar && (contentSimilar || subtitlesSimilar)) ||
+                   isSimilarContent(a.content, article.content, 200) ||
+                   subtitleMatchesTitle;
+          });
+          
+          if (isDuplicate) {
+            console.log(`Skipping similar article: ${article.title}`);
+            return false;
+          }
+          
+          // Add to processed URLs and articles
+          processedArticleUrls.add(articleKey);
+          articles.push(article);
+          console.log(`Added article: ${article.title}`);
+          return true;
+        } catch (error) {
+          console.error('Error in addArticle:', error);
           return false;
         }
+      };
+      
+      // Function to validate if a date is reasonable (not in the future and not too old)
+      const isValidDate = (timestamp: number): boolean => {
+        const now = Date.now();
+        const oneYearAgo = now - (365 * 24 * 60 * 60 * 1000);
+        const oneDayInFuture = now + (24 * 60 * 60 * 1000);
         
-        // Skip if we already have an article with the same title and similar content
-        const existingArticle = articles.find(a => 
-          a.title === article.title && 
-          a.content.substring(0, 50) === article.content.substring(0, 50)
-        );
-        
-        if (existingArticle) {
-          console.log(`Skipping duplicate article: ${article.title}`);
-          return false;
+        return timestamp > oneYearAgo && timestamp < oneDayInFuture;
+      };
+
+      // Function to parse date from various formats
+      const parseArticleDate = ($element: any): number | null => {
+        try {
+          // Try to get date from datetime attribute first (most reliable)
+          const dateTime = $element.attr('datetime');
+          if (dateTime) {
+            const date = new Date(dateTime);
+            const timestamp = date.getTime();
+            if (!isNaN(timestamp) && isValidDate(timestamp)) {
+              return timestamp;
+            }
+          }
+          
+          // Try to parse from text content
+          const dateText = $element.text().trim();
+          if (dateText) {
+            // Try various date formats
+            const dateFormats = [
+              // ISO 8601 (2023-01-01T12:00:00Z)
+              /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/,
+              // YYYY-MM-DD
+              /\b\d{4}-\d{2}-\d{2}\b/,
+              // Month DD, YYYY (January 1, 2023)
+              /[A-Za-z]+ \d{1,2}, \d{4}/,
+              // DD Month YYYY (1 January 2023)
+              /\d{1,2} [A-Za-z]+ \d{4}/,
+              // Relative dates (2 days ago, 1 week ago)
+              /(\d+) (day|week|month|year)s? ago/i
+            ];
+            
+            for (const format of dateFormats) {
+              const match = dateText.match(format);
+              if (match) {
+                try {
+                  const dateStr = match[0];
+                  const date = new Date(dateStr);
+                  const timestamp = date.getTime();
+                  if (!isNaN(timestamp) && isValidDate(timestamp)) {
+                    return timestamp;
+                  }
+                } catch (e) {
+                  continue;
+                }
+              }
+            }
+          }
+          
+          console.warn('Could not parse valid date from element');
+          return null;
+        } catch (error) {
+          console.warn('Error parsing date:', error);
+          return null;
         }
-        
-        // Add to processed URLs and articles
-        processedArticleUrls.add(normalizedUrl);
-        articles.push(article);
-        return true;
       };
       
       // Special case for Last Week in AI
@@ -115,18 +265,32 @@ export const parseHtmlPage = internalAction({
             
             // Find the main article link using data-testid
             const $mainLink = $container.find('a[data-testid="post-preview-title"]');
-            if ($mainLink.length === 0) return; // Skip if no title link found
+            if ($mainLink.length === 0) {
+              console.log('Skipping container: No title link found');
+              return; // Skip if no title link found
+            }
             
-            const href = $mainLink.attr('href') || '';
+            let href = $mainLink.attr('href') || '';
             const title = $mainLink.text().trim();
             
             // Skip if no valid title or URL
-            if (!title || title.length < 5 || !href) return;
+            if (!title || !href) {
+              console.log(`Skipping article: Missing title or URL (Title: ${title}, URL: ${href})`);
+              return;
+            }
             
-            // Make URL absolute
-            const fullUrl = href.startsWith('http') ? href : new URL(href, args.url).toString();
+            // Ensure the URL is absolute
+            if (href && !href.startsWith('http')) {
+              href = new URL(href, args.url).toString();
+            }
             
-            // Find the subtitle
+            // Skip if URL is just the base URL
+            const cleanHref = href.split('?')[0].split('#')[0];
+            if (cleanHref === args.url || cleanHref === `${args.url}/`) {
+              console.log(`Skipping article: URL is the same as base URL (${cleanHref})`);
+              return;
+            }
+            
             let subtitle = '';
             const $subtitle = $container.find('div:has(> a[data-testid="post-preview-title"])')
               .next('div')
@@ -218,14 +382,6 @@ export const parseHtmlPage = internalAction({
               console.log('Using current date as fallback');
             }
             
-            // 3. If still no valid date, use current date at noon UTC as fallback
-            if (!publicationDate) {
-              const today = new Date();
-              today.setUTCHours(12, 0, 0, 0);
-              publicationDate = today.getTime();
-              console.log('Using current date as fallback');
-            }
-            
             // Ensure the date is a valid number for Convex
             if (isNaN(publicationDate)) {
               console.warn('Invalid publication date, using current date');
@@ -236,7 +392,7 @@ export const parseHtmlPage = internalAction({
             const added = addArticle({
               title: title,
               content: content,
-              originalAddress: fullUrl,
+              originalAddress: href, // Use the processed href variable
               publicationDate: publicationDate,
             });
             
