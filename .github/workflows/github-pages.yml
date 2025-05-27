@@ -60,7 +60,9 @@ jobs:
           NODE_ENV: 'production'
           
       - name: Export static site
-        run: pnpm export
+        run: |
+          pnpm run build
+          pnpm run export
         
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
