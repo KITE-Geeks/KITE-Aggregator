@@ -74,29 +74,19 @@ export const parseHtmlPage = internalAction({
       if (args.url.includes('lastweekin.ai')) {
         console.log('Detected Last Week in AI website, using specialized parsing');
         
-        // Find all article containers - look for the main article containers
-        const articleContainers = $('div.cursor-pointer').filter((i, el) => {
-          // Only keep containers that have a link with /p/ in the URL and are likely main articles
-          const $el = $(el);
-          const hasArticleLink = $el.find('a[href*="/p/"]').length > 0;
-          // Skip containers that are likely just subtitles (smaller text, etc.)
-          const fontSize = $el.css('font-size');
-          const fontSizeNum = fontSize ? parseInt(fontSize, 10) : 0;
-          const isLikelySubtitle = fontSizeNum > 0 && fontSizeNum < 14; // Skip small text likely to be subtitles
-          return hasArticleLink && !isLikelySubtitle;
-        });
-        
-        console.log(`Found ${articleContainers.length} potential article containers`);
+        // Find all article sections - each article is in a section with data-testid="post-list"
+        const articleSections = $('section[data-testid="post-list"] > div > div');
+        console.log(`Found ${articleSections.length} article sections`);
         
         // Track processed URLs to avoid duplicates
         const processedUrls = new Set<string>();
         
-        articleContainers.each((index, container) => {
+        articleSections.each((index, section) => {
           try {
-            const $container = $(container);
+            const $section = $(section);
             
-            // Find the main article link (first link with /p/ in URL)
-            const $mainLink = $container.find('a[href*="/p/"]').first();
+            // Find the main article link (should be the first link with /p/ in URL)
+            const $mainLink = $section.find('a[href*="/p/"]').first();
             const href = $mainLink.attr('href') || '';
             let title = $mainLink.text().trim();
             
@@ -110,62 +100,46 @@ export const parseHtmlPage = internalAction({
             if (processedUrls.has(fullUrl)) return;
             processedUrls.add(fullUrl);
             
-            // Find the parent container that likely contains both title and subtitle
-            const $parentContainer = $container.closest('div[class*="flex"]').length > 0 ? 
-                                   $container.closest('div[class*="flex"]') : 
-                                   $container.parent();
-            
-            // Find all text content in the parent container
-            let content = '';
-            $parentContainer.contents().each((i, el) => {
-              // Skip links and other interactive elements
-              if (el.nodeType === 3) { // Text node
-                const text = $(el).text().trim();
-                if (text && text !== title) {
-                  content += text + '\n';
-                }
-              } else if (el.nodeType === 1) { // Element node
-                const $el = $(el);
-                const tagName = $el.prop('tagName')?.toLowerCase?.();
-                // Skip links and other interactive elements
-                if (!tagName || tagName === 'a' || tagName === 'button') return;
-                
-                const text = $el.text().trim();
-                if (text && text !== title) {
-                  // Skip very short text that might be metadata
-                  if (text.length > 10 || text.split('\n').length > 1) {
-                    content += text + '\n';
-                  }
-                }
-              }
-            });
-            
-            // Clean up the content
-            content = content
-              .replace(/\s+\n/g, '\n') // Remove trailing spaces before newlines
-              .replace(/\n{3,}/g, '\n\n') // Limit consecutive newlines
-              .trim();
-            
-            // If no content found, use the title
-            if (!content.trim()) {
-              content = title;
+            // Find the subtitle (usually in a div after the title link)
+            let subtitle = '';
+            const $subtitle = $mainLink.parent().next('div');
+            if ($subtitle.length > 0) {
+              subtitle = $subtitle.text().trim();
             }
             
-            // Extract date if available
+            // Combine title and subtitle for the content
+            let content = title;
+            if (subtitle) {
+              content = `${title}\n\n${subtitle}`;
+            }
+            
+            // Try to find the publication date
+            // It's usually in a div with class containing 'meta' or 'date' and has text like 'X hours ago' or 'X days ago'
             let publicationDate: number | null = null;
-            const dateText = $parentContainer.find('time, [datetime], .date, .post-date, span:contains("ago")').first().text().trim();
-            if (dateText) {
-              const parsedDate = parseDate(dateText);
-              if (parsedDate) {
-                publicationDate = parsedDate;
+            const $dateElement = $section.find('div:contains("ago")').first();
+            if ($dateElement.length > 0) {
+              const dateText = $dateElement.text().trim();
+              if (dateText) {
+                const parsedDate = parseDate(dateText);
+                if (parsedDate) {
+                  publicationDate = parsedDate;
+                }
               }
             }
             
-            // If no valid date found, use the current time but in a way that's consistent between server and client
+            // If no valid date found, try to find a timestamp in the URL
+            if (!publicationDate && href) {
+              const dateMatch = href.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+              if (dateMatch) {
+                const [_, year, month, day] = dateMatch;
+                const dateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`;
+                publicationDate = new Date(dateString).getTime();
+              }
+            }
+            
+            // If still no date, use current time (as a last resort)
             if (!publicationDate) {
-              const now = new Date();
-              const dateString = now.toISOString();
-              publicationDate = new Date(dateString).getTime();
+              publicationDate = new Date().getTime();
             }
             
             // Add the article
@@ -176,8 +150,10 @@ export const parseHtmlPage = internalAction({
               publicationDate: publicationDate,
             });
             
+            console.log(`Parsed article: ${title} (${new Date(publicationDate).toISOString()})`);
+            
           } catch (error) {
-            console.error('Error parsing article container:', error);
+            console.error('Error parsing article section:', error);
           }
         });
         
