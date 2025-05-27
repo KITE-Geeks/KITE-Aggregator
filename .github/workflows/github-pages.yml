@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [master, main]
+    branches: [master]
   workflow_dispatch:
 
 
@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: 'pages'
+  group: "pages"
   cancel-in-progress: false
 
 jobs:
@@ -21,31 +21,39 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
         
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20.x'
+          cache: 'pnpm'
           
-      - name: Install pnpm
+      - name: Setup PNPM
         uses: pnpm/action-setup@v3
         with:
-          version: 8
+          version: 9.x
           
-      - name: Get pnpm store directory
+      - name: Get PNPM Store Directory
         id: pnpm-cache
         shell: bash
         run: |
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
           
-      - name: Setup pnpm cache
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        
+      - name: Restore cache
         uses: actions/cache@v4
         with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          path: |
+            ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+            .next/cache
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
-          
+            
       - name: Install dependencies
         run: pnpm install
         
@@ -59,12 +67,7 @@ jobs:
           GITHUB_ACTIONS: 'true'
           NODE_ENV: 'production'
           
-      - name: Export static site
-        run: |
-          pnpm run build
-          pnpm run export
-        
-      - name: Upload artifact
+      - name: Upload static files
         uses: actions/upload-pages-artifact@v3
         with:
           path: out/
