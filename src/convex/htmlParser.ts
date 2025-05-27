@@ -85,8 +85,8 @@ export const parseHtmlPage = internalAction({
           try {
             const $container = $(container);
             
-            // Find the main article link (should be the first link with /p/ in URL)
-            const $mainLink = $container.find('a[href*="/p/"]').first();
+            // Find the main article link using data-testid
+            const $mainLink = $container.find('a[data-testid="post-preview-title"]');
             const href = $mainLink.attr('href') || '';
             let title = $mainLink.text().trim();
             
@@ -100,11 +100,12 @@ export const parseHtmlPage = internalAction({
             if (processedUrls.has(fullUrl)) return;
             processedUrls.add(fullUrl);
             
-            // Find the subtitle (in the next div after the title link's parent)
+            // Find the subtitle (in the next div after the title's parent div)
             let subtitle = '';
             const $subtitle = $mainLink.closest('div').next('div').find('a').first();
             if ($subtitle.length > 0) {
               subtitle = $subtitle.text().trim();
+              console.log(`Found subtitle: ${subtitle}`);
             }
             
             // Combine title and subtitle for the content
@@ -115,31 +116,29 @@ export const parseHtmlPage = internalAction({
             
             // Find the publication date in the time element
             let publicationDate: number | null = null;
-            const $dateElement = $container.find('time[datetime]');
             
+            // First try to get the date from the datetime attribute
+            const $dateElement = $container.find('time[datetime]');
             if ($dateElement.length > 0) {
               const dateString = $dateElement.attr('datetime');
               if (dateString) {
-                const parsedDate = new Date(dateString).getTime();
-                if (!isNaN(parsedDate)) {
-                  publicationDate = parsedDate;
-                }
+                publicationDate = new Date(dateString).getTime();
+                console.log(`Found date from datetime: ${dateString} -> ${publicationDate}`);
               }
             }
             
-            // If no valid date found, look for date text
-            if (!publicationDate) {
-              const $dateTextElement = $container.find('div:contains("Last Week in AI #")').first();
+            // If no valid date found, look for date text in time element
+            if (!publicationDate || isNaN(publicationDate)) {
+              const $dateTextElement = $container.find('time').first();
               if ($dateTextElement.length > 0) {
-                let dateText = $dateTextElement.text().trim();
-                // Extract date in format 'Month Day' (e.g., 'May 18')
+                const dateText = $dateTextElement.text().trim();
+                console.log(`Found date text: ${dateText}`);
+                // Try to parse the date text (e.g., 'May 18')
                 const dateMatch = dateText.match(/([A-Za-z]+ \d{1,2})/);
                 if (dateMatch) {
                   const dateString = `${dateMatch[0]}, ${new Date().getFullYear()} 12:00:00 UTC`;
-                  const parsedDate = new Date(dateString).getTime();
-                  if (!isNaN(parsedDate)) {
-                    publicationDate = parsedDate;
-                  }
+                  publicationDate = new Date(dateString).getTime();
+                  console.log(`Parsed date from text: ${dateString} -> ${publicationDate}`);
                 }
               }
             }
