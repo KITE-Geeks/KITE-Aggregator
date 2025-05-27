@@ -74,8 +74,12 @@ export const parseHtmlPage = internalAction({
       if (args.url.includes('lastweekin.ai')) {
         console.log('Detected Last Week in AI website, using specialized parsing');
         
-        // Try multiple selectors to find article containers
-        const articleContainers = $('div.cursor-pointer, .post-preview, article, [class*="post-"]');
+        // Find all article containers
+        const articleContainers = $('div.cursor-pointer').filter((i, el) => {
+          // Only keep containers that have a link with /p/ in the URL
+          return $(el).find('a[href*="/p/"]').length > 0;
+        });
+        
         console.log(`Found ${articleContainers.length} potential article containers`);
         
         // Track processed URLs to avoid duplicates
@@ -85,54 +89,57 @@ export const parseHtmlPage = internalAction({
           try {
             const $container = $(container);
             
-            // Find the main article link
-            const $link = $container.find('a[href*="/p/"]').first();
+            // Find all links in this container
+            const $links = $container.find('a[href*="/p/"]');
+            if ($links.length === 0) return;
             
-            // Skip if no valid link found
-            if ($link.length === 0) return;
+            // Use the first link as the main article link
+            const $mainLink = $links.first();
+            const href = $mainLink.attr('href') || '';
+            let title = $mainLink.text().trim();
             
-            const href = $link.attr('href') || '';
-            const title = $link.text().trim();
+            // Skip if no valid title or URL
+            if (!title || title.length < 5 || !href) return;
             
-            // Skip if no valid title
-            if (!title || title.length < 5) return;
+            // Make URL absolute
+            const fullUrl = href.startsWith('http') ? href : new URL(href, args.url).toString();
             
             // Skip if we've already processed this URL
-            const fullUrl = href.startsWith('http') ? href : new URL(href, args.url).toString();
             if (processedUrls.has(fullUrl)) return;
             processedUrls.add(fullUrl);
             
-            // Find content - try multiple approaches
+            // Find all text content in the container
             let content = '';
+            const $textElements = $container.contents().filter((i, el) => {
+              // Only keep text nodes and non-link elements
+              return el.nodeType === 3 || 
+                     (el.nodeType === 1 && 'tagName' in el && 
+                      typeof el.tagName === 'string' && 
+                      el.tagName.toLowerCase() !== 'a');
+            });
             
-            // 1. Look for direct text nodes in container
-            $container.contents().each((i, el) => {
-              if (el.nodeType === 3) { // Text node
-                const text = $(el).text().trim();
-                if (text && text.length > 10 && text !== title) {
-                  content += text + ' ';
-                }
+            // Collect all text content
+            $textElements.each((i, el) => {
+              const text = $(el).text().trim();
+              if (text && text !== title) {
+                content += text + ' ';
               }
             });
             
-            // 2. Look for paragraphs or divs with content
-            if (!content.trim()) {
-              $container.find('p, div').each((i, el) => {
-                const text = $(el).text().trim();
-                if (text && text.length > 10 && text !== title) {
-                  content += text + ' ';
-                }
-              });
-            }
-            
-            // 3. If still no content, use title
+            // If no content found, use the title
             if (!content.trim()) {
               content = title;
             }
             
-            // Try to extract date if available
+            // Clean up the content
+            content = content
+              .replace(/\s+/g, ' ') // Normalize whitespace
+              .replace(/\s*[\r\n]+\s*/g, '\n') // Normalize newlines
+              .trim();
+            
+            // Extract date if available
             let publicationDate = Date.now();
-            const dateText = $container.find('time, [datetime], .date, .post-date').first().text().trim();
+            const dateText = $container.find('time, [datetime], .date, .post-date, span:contains("ago")').first().text().trim();
             if (dateText) {
               const parsedDate = parseDate(dateText);
               if (parsedDate) {
@@ -140,12 +147,7 @@ export const parseHtmlPage = internalAction({
               }
             }
             
-            // Clean up content
-            content = content
-              .replace(/\s+/g, ' ') // Normalize whitespace
-              .replace(/\s*[\r\n]+\s*/g, '\n') // Normalize newlines
-              .trim();
-            
+            // Add the article
             articles.push({
               title: title,
               content: content,
@@ -154,11 +156,11 @@ export const parseHtmlPage = internalAction({
             });
             
           } catch (error) {
-            console.error('Error parsing Last Week in AI article:', error);
+            console.error('Error parsing article container:', error);
           }
         });
         
-        console.log(`Successfully parsed ${articles.length} articles from Last Week in AI`);
+        console.log(`Successfully parsed ${articles.length} articles`);
         
         // Return articles if we found any
         if (articles.length > 0) {
